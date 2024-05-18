@@ -1,0 +1,570 @@
+package zombie;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import zombie.core.Core;
+import zombie.core.Translator;
+import zombie.core.logger.ExceptionLogger;
+import zombie.debug.DebugLog;
+import zombie.gameStates.ChooseGameInfo;
+import zombie.iso.IsoWorld;
+
+
+public class MapGroups {
+	private ArrayList groups = new ArrayList();
+	private ArrayList realDirectories = new ArrayList();
+
+	public void createGroups() {
+		this.createGroups(ZomboidFileSystem.instance.getModIDs(), true);
+	}
+
+	public void createGroups(boolean boolean1) {
+		this.createGroups(ZomboidFileSystem.instance.getModIDs(), boolean1);
+	}
+
+	public void createGroups(ArrayList arrayList, boolean boolean1) {
+		this.groups.clear();
+		this.realDirectories.clear();
+		ChooseGameInfo chooseGameInfo = new ChooseGameInfo();
+		Iterator iterator = arrayList.iterator();
+		while (true) {
+			ChooseGameInfo.Mod mod;
+			String[] stringArray;
+			do {
+				File file;
+				do {
+					do {
+						if (!iterator.hasNext()) {
+							Iterator iterator2;
+							if (boolean1) {
+								ArrayList arrayList2 = getVanillaMapDirectories();
+								iterator2 = arrayList2.iterator();
+								while (iterator2.hasNext()) {
+									String string = (String)iterator2.next();
+									this.handleMapDirectory(string, "media/maps/" + string);
+								}
+							}
+
+							iterator = this.realDirectories.iterator();
+							while (iterator.hasNext()) {
+								MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)iterator.next();
+								ArrayList arrayList3 = new ArrayList();
+								this.getDirsRecursively(mapDirectory, arrayList3);
+								MapGroups.MapGroup mapGroup = this.findGroupWithAnyOfTheseDirectories(arrayList3);
+								if (mapGroup == null) {
+									mapGroup = new MapGroups.MapGroup();
+									this.groups.add(mapGroup);
+								}
+
+								Iterator iterator3 = arrayList3.iterator();
+								while (iterator3.hasNext()) {
+									MapGroups.MapDirectory mapDirectory2 = (MapGroups.MapDirectory)iterator3.next();
+									if (!mapGroup.hasDirectory(mapDirectory2.name)) {
+										mapGroup.addDirectory(mapDirectory2);
+									}
+								}
+							}
+
+							iterator = this.groups.iterator();
+							MapGroups.MapGroup mapGroup2;
+							while (iterator.hasNext()) {
+								mapGroup2 = (MapGroups.MapGroup)iterator.next();
+								mapGroup2.setPriority();
+							}
+
+							iterator = this.groups.iterator();
+							while (iterator.hasNext()) {
+								mapGroup2 = (MapGroups.MapGroup)iterator.next();
+								mapGroup2.setOrder();
+							}
+
+							if (Core.bDebug) {
+								int int1 = 1;
+								for (iterator2 = this.groups.iterator(); iterator2.hasNext(); ++int1) {
+									MapGroups.MapGroup mapGroup3 = (MapGroups.MapGroup)iterator2.next();
+									DebugLog.log("MapGroup " + int1 + "/" + this.groups.size());
+									Iterator iterator4 = mapGroup3.directories.iterator();
+									while (iterator4.hasNext()) {
+										MapGroups.MapDirectory mapDirectory3 = (MapGroups.MapDirectory)iterator4.next();
+										DebugLog.log("  " + mapDirectory3.name);
+									}
+								}
+
+								DebugLog.log("-----");
+							}
+
+							return;
+						}
+
+						String string2 = (String)iterator.next();
+						mod = chooseGameInfo.getModDetails(string2);
+					}			 while (mod == null);
+
+					file = new File(mod.getDir() + "/media/maps/");
+				}		 while (!file.exists());
+
+				stringArray = file.list();
+			}	 while (stringArray == null);
+
+			for (int int2 = 0; int2 < stringArray.length; ++int2) {
+				String string3 = stringArray[int2];
+				this.handleMapDirectory(string3, mod.getDir() + "/media/maps/" + string3);
+			}
+		}
+	}
+
+	private void getDirsRecursively(MapGroups.MapDirectory mapDirectory, ArrayList arrayList) {
+		if (!arrayList.contains(mapDirectory)) {
+			arrayList.add(mapDirectory);
+			Iterator iterator = mapDirectory.lotDirs.iterator();
+			while (true) {
+				while (iterator.hasNext()) {
+					String string = (String)iterator.next();
+					Iterator iterator2 = this.realDirectories.iterator();
+					while (iterator2.hasNext()) {
+						MapGroups.MapDirectory mapDirectory2 = (MapGroups.MapDirectory)iterator2.next();
+						if (mapDirectory2.name.equals(string)) {
+							this.getDirsRecursively(mapDirectory2, arrayList);
+							break;
+						}
+					}
+				}
+
+				return;
+			}
+		}
+	}
+
+	public int getNumberOfGroups() {
+		return this.groups.size();
+	}
+
+	public ArrayList getMapDirectoriesInGroup(int int1) {
+		if (int1 >= 0 && int1 < this.groups.size()) {
+			ArrayList arrayList = new ArrayList();
+			Iterator iterator = ((MapGroups.MapGroup)this.groups.get(int1)).directories.iterator();
+			while (iterator.hasNext()) {
+				MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)iterator.next();
+				arrayList.add(mapDirectory.name);
+			}
+
+			return arrayList;
+		} else {
+			throw new RuntimeException("invalid MapGroups index " + int1);
+		}
+	}
+
+	public void setWorld(int int1) {
+		ArrayList arrayList = this.getMapDirectoriesInGroup(int1);
+		String string = "";
+		for (int int2 = 0; int2 < arrayList.size(); ++int2) {
+			string = string + (String)arrayList.get(int2);
+			if (int2 < arrayList.size() - 1) {
+				string = string + ";";
+			}
+		}
+
+		IsoWorld.instance.setMap(string);
+	}
+
+	private void handleMapDirectory(String string, String string2) {
+		ArrayList arrayList = this.getLotDirectories(string2);
+		if (arrayList != null) {
+			MapGroups.MapDirectory mapDirectory = new MapGroups.MapDirectory(string, string2, arrayList);
+			this.realDirectories.add(mapDirectory);
+		}
+	}
+
+	private ArrayList getLotDirectories(String string) {
+		File file = new File(string + "/map.info");
+		if (!file.exists()) {
+			return null;
+		} else {
+			ArrayList arrayList = new ArrayList();
+			try {
+				FileReader fileReader = new FileReader(file.getAbsolutePath());
+				Throwable throwable = null;
+				try {
+					BufferedReader bufferedReader = new BufferedReader(fileReader);
+					Throwable throwable2 = null;
+					try {
+						String string2 = null;
+						while ((string2 = bufferedReader.readLine()) != null) {
+							string2 = string2.trim();
+							if (string2.startsWith("lots=")) {
+								arrayList.add(string2.replace("lots=", "").trim());
+							}
+						}
+					} catch (Throwable throwable3) {
+						throwable2 = throwable3;
+						throw throwable3;
+					} finally {
+						if (bufferedReader != null) {
+							if (throwable2 != null) {
+								try {
+									bufferedReader.close();
+								} catch (Throwable throwable4) {
+									throwable2.addSuppressed(throwable4);
+								}
+							} else {
+								bufferedReader.close();
+							}
+						}
+					}
+				} catch (Throwable throwable5) {
+					throwable = throwable5;
+					throw throwable5;
+				} finally {
+					if (fileReader != null) {
+						if (throwable != null) {
+							try {
+								fileReader.close();
+							} catch (Throwable throwable6) {
+								throwable.addSuppressed(throwable6);
+							}
+						} else {
+							fileReader.close();
+						}
+					}
+				}
+
+				return arrayList;
+			} catch (Exception exception) {
+				ExceptionLogger.logException(exception);
+				return null;
+			}
+		}
+	}
+
+	private MapGroups.MapGroup findGroupWithAnyOfTheseDirectories(ArrayList arrayList) {
+		Iterator iterator = this.groups.iterator();
+		MapGroups.MapGroup mapGroup;
+		do {
+			if (!iterator.hasNext()) {
+				return null;
+			}
+
+			mapGroup = (MapGroups.MapGroup)iterator.next();
+		} while (!mapGroup.hasAnyOfTheseDirectories(arrayList));
+
+		return mapGroup;
+	}
+
+	private static ArrayList getVanillaMapDirectories() {
+		ArrayList arrayList = new ArrayList();
+		File file = new File("media/maps/");
+		String[] stringArray = file.list();
+		if (stringArray != null) {
+			for (int int1 = 0; int1 < stringArray.length; ++int1) {
+				String string = stringArray[int1];
+				if (!string.equals("challengemaps")) {
+					arrayList.add(string);
+				}
+			}
+		}
+
+		return arrayList;
+	}
+
+	public static String addMissingVanillaDirectories(String string) {
+		ArrayList arrayList = getVanillaMapDirectories();
+		boolean boolean1 = false;
+		String[] stringArray = string.split(";");
+		String[] stringArray2 = stringArray;
+		int int1 = stringArray.length;
+		int int2;
+		String string2;
+		for (int2 = 0; int2 < int1; ++int2) {
+			string2 = stringArray2[int2];
+			string2 = string2.trim();
+			if (!string2.isEmpty() && arrayList.contains(string2)) {
+				boolean1 = true;
+				break;
+			}
+		}
+
+		if (!boolean1) {
+			return string;
+		} else {
+			ArrayList arrayList2 = new ArrayList();
+			String[] stringArray3 = stringArray;
+			int2 = stringArray.length;
+			for (int int3 = 0; int3 < int2; ++int3) {
+				String string3 = stringArray3[int3];
+				string3 = string3.trim();
+				if (!string3.isEmpty()) {
+					arrayList2.add(string3);
+				}
+			}
+
+			Iterator iterator = arrayList.iterator();
+			while (iterator.hasNext()) {
+				String string4 = (String)iterator.next();
+				if (!arrayList2.contains(string4)) {
+					arrayList2.add(string4);
+				}
+			}
+
+			String string5 = "";
+			for (Iterator iterator2 = arrayList2.iterator(); iterator2.hasNext(); string5 = string5 + string2) {
+				string2 = (String)iterator2.next();
+				if (!string5.isEmpty()) {
+					string5 = string5 + ";";
+				}
+			}
+
+			return string5;
+		}
+	}
+
+	public ArrayList getAllMapsInOrder() {
+		ArrayList arrayList = new ArrayList();
+		Iterator iterator = this.groups.iterator();
+		while (iterator.hasNext()) {
+			MapGroups.MapGroup mapGroup = (MapGroups.MapGroup)iterator.next();
+			Iterator iterator2 = mapGroup.directories.iterator();
+			while (iterator2.hasNext()) {
+				MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)iterator2.next();
+				arrayList.add(mapDirectory.name);
+			}
+		}
+
+		return arrayList;
+	}
+
+	public boolean checkMapConflicts() {
+		boolean boolean1 = false;
+		MapGroups.MapGroup mapGroup;
+		for (Iterator iterator = this.groups.iterator(); iterator.hasNext(); boolean1 |= mapGroup.checkMapConflicts()) {
+			mapGroup = (MapGroups.MapGroup)iterator.next();
+		}
+
+		return boolean1;
+	}
+
+	public ArrayList getMapConflicts(String string) {
+		Iterator iterator = this.groups.iterator();
+		MapGroups.MapDirectory mapDirectory;
+		do {
+			if (!iterator.hasNext()) {
+				return null;
+			}
+
+			MapGroups.MapGroup mapGroup = (MapGroups.MapGroup)iterator.next();
+			mapDirectory = mapGroup.getDirectoryByName(string);
+		} while (mapDirectory == null);
+
+		ArrayList arrayList = new ArrayList();
+		arrayList.addAll(mapDirectory.conflicts);
+		return arrayList;
+	}
+
+	private class MapGroup {
+		private LinkedList directories;
+
+		private MapGroup() {
+			this.directories = new LinkedList();
+		}
+
+		void addDirectory(String string, String string2) {
+			assert !this.hasDirectory(string);
+			MapGroups.MapDirectory mapDirectory = MapGroups.this.new MapDirectory(string, string2);
+			this.directories.add(mapDirectory);
+		}
+
+		void addDirectory(String string, String string2, ArrayList arrayList) {
+			assert !this.hasDirectory(string);
+			MapGroups.MapDirectory mapDirectory = MapGroups.this.new MapDirectory(string, string2, arrayList);
+			this.directories.add(mapDirectory);
+		}
+
+		void addDirectory(MapGroups.MapDirectory mapDirectory) {
+			assert !this.hasDirectory(mapDirectory.name);
+			this.directories.add(mapDirectory);
+		}
+
+		MapGroups.MapDirectory getDirectoryByName(String string) {
+			Iterator iterator = this.directories.iterator();
+			MapGroups.MapDirectory mapDirectory;
+			do {
+				if (!iterator.hasNext()) {
+					return null;
+				}
+
+				mapDirectory = (MapGroups.MapDirectory)iterator.next();
+			} while (!mapDirectory.name.equals(string));
+
+			return mapDirectory;
+		}
+
+		boolean hasDirectory(String string) {
+			return this.getDirectoryByName(string) != null;
+		}
+
+		boolean hasAnyOfTheseDirectories(ArrayList arrayList) {
+			Iterator iterator = arrayList.iterator();
+			MapGroups.MapDirectory mapDirectory;
+			do {
+				if (!iterator.hasNext()) {
+					return false;
+				}
+
+				mapDirectory = (MapGroups.MapDirectory)iterator.next();
+			} while (!this.directories.contains(mapDirectory));
+
+			return true;
+		}
+
+		boolean isReferencedByOtherMaps(MapGroups.MapDirectory mapDirectory) {
+			Iterator iterator = this.directories.iterator();
+			MapGroups.MapDirectory mapDirectory2;
+			do {
+				if (!iterator.hasNext()) {
+					return false;
+				}
+
+				mapDirectory2 = (MapGroups.MapDirectory)iterator.next();
+			} while (mapDirectory == mapDirectory2 || !mapDirectory2.lotDirs.contains(mapDirectory.name));
+
+			return true;
+		}
+
+		void getDirsRecursively(MapGroups.MapDirectory mapDirectory, ArrayList arrayList) {
+			if (!arrayList.contains(mapDirectory.name)) {
+				arrayList.add(mapDirectory.name);
+				Iterator iterator = mapDirectory.lotDirs.iterator();
+				while (iterator.hasNext()) {
+					String string = (String)iterator.next();
+					MapGroups.MapDirectory mapDirectory2 = this.getDirectoryByName(string);
+					if (mapDirectory2 != null) {
+						this.getDirsRecursively(mapDirectory2, arrayList);
+					}
+				}
+			}
+		}
+
+		void setPriority() {
+			Iterator iterator = this.directories.iterator();
+			while (iterator.hasNext()) {
+				MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)iterator.next();
+				if (!this.isReferencedByOtherMaps(mapDirectory)) {
+					ArrayList arrayList = new ArrayList();
+					this.getDirsRecursively(mapDirectory, arrayList);
+					this.setPriority(arrayList);
+				}
+			}
+		}
+
+		void setPriority(List list) {
+			ArrayList arrayList = new ArrayList(list.size());
+			Iterator iterator = list.iterator();
+			while (iterator.hasNext()) {
+				String string = (String)iterator.next();
+				if (this.hasDirectory(string)) {
+					arrayList.add(this.getDirectoryByName(string));
+				}
+			}
+
+			for (int int1 = 0; int1 < this.directories.size(); ++int1) {
+				MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)this.directories.get(int1);
+				if (list.contains(mapDirectory.name)) {
+					this.directories.set(int1, arrayList.remove(0));
+				}
+			}
+		}
+
+		void setOrder() {
+			LinkedList linkedList = Core.getInstance().getMapOrder();
+			if (linkedList != null && !linkedList.isEmpty()) {
+				this.setPriority(linkedList);
+			}
+		}
+
+		boolean checkMapConflicts() {
+			HashMap hashMap = new HashMap();
+			ArrayList arrayList = new ArrayList();
+			Iterator iterator = this.directories.iterator();
+			while (iterator.hasNext()) {
+				MapGroups.MapDirectory mapDirectory = (MapGroups.MapDirectory)iterator.next();
+				mapDirectory.conflicts.clear();
+				arrayList.clear();
+				mapDirectory.getLotHeaders(arrayList);
+				String string;
+				for (Iterator iterator2 = arrayList.iterator(); iterator2.hasNext(); ((ArrayList)hashMap.get(string)).add(mapDirectory.name)) {
+					string = (String)iterator2.next();
+					if (!hashMap.containsKey(string)) {
+						hashMap.put(string, new ArrayList());
+					}
+				}
+			}
+
+			boolean boolean1 = false;
+			Iterator iterator3 = hashMap.keySet().iterator();
+			while (true) {
+				String string2;
+				ArrayList arrayList2;
+				do {
+					if (!iterator3.hasNext()) {
+						return boolean1;
+					}
+
+					string2 = (String)iterator3.next();
+					arrayList2 = (ArrayList)hashMap.get(string2);
+				}	 while (arrayList2.size() <= 1);
+
+				for (int int1 = 0; int1 < arrayList2.size(); ++int1) {
+					MapGroups.MapDirectory mapDirectory2 = this.getDirectoryByName((String)arrayList2.get(int1));
+					for (int int2 = 0; int2 < arrayList2.size(); ++int2) {
+						if (int1 != int2) {
+							String string3 = Translator.getText("UI_MapConflict", mapDirectory2.name, arrayList2.get(int2), string2);
+							mapDirectory2.conflicts.add(string3);
+							boolean1 = true;
+						}
+					}
+				}
+			}
+		}
+
+		MapGroup(Object object) {
+			this();
+		}
+	}
+
+	private class MapDirectory {
+		String name;
+		String path;
+		ArrayList lotDirs = new ArrayList();
+		ArrayList conflicts = new ArrayList();
+
+		public MapDirectory(String string, String string2) {
+			this.name = string;
+			this.path = string2;
+		}
+
+		public MapDirectory(String string, String string2, ArrayList arrayList) {
+			this.name = string;
+			this.path = string2;
+			this.lotDirs.addAll(arrayList);
+		}
+
+		public void getLotHeaders(ArrayList arrayList) {
+			File file = new File(this.path);
+			if (file.isDirectory()) {
+				String[] stringArray = file.list();
+				if (stringArray != null) {
+					for (int int1 = 0; int1 < stringArray.length; ++int1) {
+						if (stringArray[int1].endsWith(".lotheader")) {
+							arrayList.add(stringArray[int1]);
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,10 @@
+xpSystemText = {};
+xpSystemText.nextSkillIn = getText("IGUI_XP_Next_skill_point");
+xpSystemText.xp = getText("IGUI_XP_xp");
+xpSystemText.skillPtAvailable = getText("IGUI_XP_Skill_point_available");
+xpSystemText.locked = getText("IGUI_XP_Locked");
+xpSystemText.unlocked = getText("IGUI_XP_UnLocked");
+xpSystemText.lvl = getText("IGUI_XP_level");
+xpSystemText.skills = getText("IGUI_XP_Skills");
+xpSystemText.health = getText("IGUI_XP_Health");
+xpSystemText.info = getText("IGUI_XP_Info");

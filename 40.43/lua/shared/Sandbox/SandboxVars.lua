@@ -1,0 +1,2 @@
+SandboxVars = require "Sandbox/Survival"
+
